@@ -13,7 +13,7 @@ This blog post describes an (unexploitable, **yet**) out of bounds write bug in 
 
 The Host Controller Interface (HCI) socket mechanism provides a direct interface from user-space to the Bluetooth microcontroller via the local Bluetooth adapter. This interface is used for example to understand which Bluetooth adapters are present on your system. 
 
-Here is an example `strace` from `hciconfig`, a [BlueZ](http://www.bluez.org/) util, analogous to `ifconfig`, which displays local Bluetooth adapters:
+Here is an example `strace` log from `hciconfig`, a [BlueZ](http://www.bluez.org/) util, analogous to `ifconfig`, which displays local Bluetooth adapters:
 
 ```
 socket(AF_BLUETOOTH, SOCK_RAW, BTPROTO_HCI) = 3
@@ -57,6 +57,7 @@ int hci_register_dev(struct hci_dev *hdev)
 	hdev->id = id;
 
 ```
+Where an out of bounds write occurs at `sprintf()` to `hdev->name` when the `id` local variable has a decimal notation which value is greater than 9999.
 
 # Breakdown
 The `id` local variable, is defined as an `int`, which would be 4 bytes in size on modern architectures. 
@@ -119,7 +120,7 @@ The [fix](https://github.com/torvalds/linux/commit/103a2f3255a95991252f8f13375c3
 
 ## Exploitation
 
-To exploit the out of bounds write, 10000 Bluetooth devices should be connected. To simulate this behaviour, I loaded the `hci_vhci.ko` kernel module to simulate a connection of multiple Bluetooth devices. Loading the drivers exposed a character device named `/dev/vhci`.
+To exploit the out of bounds write, 10000 Bluetooth devices should be connected. To simulate this behaviour, I loaded the `hci_vhci.ko` kernel module to simulate a connection of multiple Bluetooth devices. Loading the driver exposed a character device named `/dev/vhci`.
 To trigger the id truncation bug, I simulated a connection of 65537 `(2^16+1)` Bluetooth devices using the following code:
 
 ```c
@@ -138,7 +139,6 @@ int main(){
         for(int i = 0; i < 65537;i++){
                 int fd = open("/dev/vhci", O_RDWR);
         }
-        sleep(3600);
 }
 
 ```
