@@ -144,12 +144,10 @@ int main(){
 ```
 
 I used the [setrlimit] system call to increase the maximum number of open file descriptors of the relevant exploit.
-When the process exited, and the file descriptors were closed (== the HCI devices were released), the following bugs were triggered;
 
+# Out of bounds write
 
-# Bug 1: Out of bounds write
-
-An out of bounds write occurs at `net/bluetooth/hci_core.c`, at the `HCIGETDEVINFO` ioctl handler:
+The above scenario could lead to an out of bounds write, using the `HCIGETDEVINFO` ioctl handler (at `/net/bluetooth/hci_core.c`):
 ```c
 int hci_get_dev_info(void __user *arg)
 {
@@ -170,7 +168,7 @@ int hci_get_dev_info(void __user *arg)
 
 }
 ```
-There is no any bounds checking and there is an **explicit** use of strcpy().
+There no bounds checking and there is an **explicit** use of strcpy().
 
 Where `struct hci_dev` includes the following member order:
 ```c
@@ -182,7 +180,7 @@ struct hci_dev_info {
 	[...]
 ```
 Given an `hdev->name` with an id value which is greater than 99999 in decimal notaion, any user-space tool that uses the `HCIGETDEVINFO` ioctl could be tricked into getting an incorrect Bluetooth device address.
-Furthermore, the given HCI id would return the first set `struct hci_dev`. For example, setting an ioctl with `HCIGETDEVINFO` of a  HCI device with id value of 65537 would return a `struct hci_dev` with id value of 1.
+Furthermore, the given HCI id would return the first id value set (modulo to 65536) `struct hci_dev`. For example, setting an ioctl with `HCIGETDEVINFO` of a  HCI device with id value of 65537 would return a `struct hci_dev` with id value of 1.
 
 
 ## Timeline
@@ -195,9 +193,9 @@ Furthermore, the given HCI id would return the first set `struct hci_dev`. For e
 ## Preview to the next part
 
 In the next part I will describe several exploitation scenarios, including a use-after-free read and a NULL pointer dereference.
-# Bug 1: Use-after-free read
+Attaching KASAN logs:
 
-A KASAN log, describing the bug:
+# Bug 1: Use-after-free read
 
 >```
 >[ 4294.772216] BUG: KASAN: use-after-free in kobject_put+0x31/0x460
