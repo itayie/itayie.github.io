@@ -120,7 +120,7 @@ The [fix](https://github.com/torvalds/linux/commit/103a2f3255a95991252f8f13375c3
 
 ## Exploitation
 
-To exploit the out of bounds write, 10000 Bluetooth devices should be connected. To simulate this behaviour, I loaded the `hci_vhci.ko` kernel module to simulate a connection of multiple Bluetooth devices. Loading the driver exposed a character device named `/dev/vhci`.
+To exploit the out of bounds write bug, 10000 Bluetooth devices should be connected. To simulate this behaviour, I loaded the `hci_vhci.ko` kernel module to simulate a connection of multiple Bluetooth devices. Loading the driver exposed a character device named `/dev/vhci`, which is accessible from **root** permissions only.
 To trigger the id truncation bug, I simulated a connection of 65537 `(2^16+1)` Bluetooth devices using the following code:
 
 ```c
@@ -180,6 +180,7 @@ struct hci_dev_info {
 	[...]
 ```
 Given an `hdev->name` with an id value which is greater than 99999 in decimal notaion, any user-space tool that uses the `HCIGETDEVINFO` ioctl could be tricked into getting an incorrect Bluetooth device address.
+
 Furthermore, the given HCI id would return the first id value set (modulo to 65536) `struct hci_dev`. For example, setting an ioctl with `HCIGETDEVINFO` of a  HCI device with id value of 65537 would return a `struct hci_dev` with id value of 1.
 
 
