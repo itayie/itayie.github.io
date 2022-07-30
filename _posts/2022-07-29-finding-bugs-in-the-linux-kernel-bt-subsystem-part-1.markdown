@@ -318,7 +318,9 @@ A KASAN log, describing the bug:
 
 ## Timeline
 > 02/05/2022 - Bug reported to security@kernel.org
+>
 > 07/05/2022 - The [commit] was sent publicly, without disclosing any exploitation vectors or crash logs, as requested
+>
 > 11/05/2022 - The [commit] was merged upstream to all Linux Kernel stable versions
 
 
