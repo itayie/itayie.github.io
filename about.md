@@ -4,7 +4,7 @@ title: About
 permalink: /about/
 ---
 
-I'm Itay, a security researcher mainly interested in software security research in the realms of operating systems, embedded systems and communication protocols.
+I'm Itay Iellin, a security researcher mainly interested in software security research in the realms of operating systems, embedded systems and communication protocols.
 
 My Linux Kernel contributions are:
 
