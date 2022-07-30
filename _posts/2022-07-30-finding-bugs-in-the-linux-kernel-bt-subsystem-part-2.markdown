@@ -14,21 +14,16 @@ I have written a short summary regarding HCI sockets in my [previous] blog post.
 
 ## The bug
 
-The bug exists in `lib/idr.c`, in the `ida_simple_remove()` function, if the `id` parameter has a negative value then a `BUG_ON` macro is triggered:
+The bug exists in `lib/idr.c`, in the `ida_free` function, if the `id` parameter has a negative value then a `BUG_ON` macro is triggered:
 ```c
- * ida_simple_remove - remove an allocated id.
- * @ida: the (initialized) ida.
- * @id: the id returned by ida_simple_get.
+ * ida_free() - Release an allocated ID.
+ * @ida: IDA handle.
+ * @id: Previously allocated ID.
  *
- * Use to release an id allocated with ida_simple_get().
- *
- * Compared to ida_remove() this function does its own locking, and should be
- * used unless there are special requirements.
+ * Context: Any context.
  */
-void ida_simple_remove(struct ida *ida, unsigned int id)
+void ida_free(struct ida *ida, unsigned int id)
 {
-	unsigned long flags;
-
 	BUG_ON((int)id < 0);
 ```
 
@@ -84,6 +79,10 @@ static void hci_sock_free_cookie(struct sock *sk)
 	if (id) {
 		hci_pi(sk)->cookie = 0xffffffff;
 		ida_simple_remove(&sock_cookie_ida, id);
+```
+Where `ida_simple_remove()` is defined as:
+```c
+#define ida_simple_remove(ida, id)	ida_free(ida, id)
 ```
 
 I have faced some difficulties, firstly with small RAM size. Given that 2^31 HCI sockets would take a tremendous amount of RAM space, I tried to bypass this using another bug, in the HCI socket's bind implementation:
@@ -143,7 +142,7 @@ This allows me to trigger the `BUG_ON` macro without any RAM size requirements.
 
 ## The fix
 
-The [fix] was simply to remove the `BUG_ON` macro from the `ida_simple_remove()` function:
+The [fix] was simply to remove the `BUG_ON` macro from the `ida_free()` function:
 
 ```c
 void ida_free(struct ida *ida, unsigned int id)
