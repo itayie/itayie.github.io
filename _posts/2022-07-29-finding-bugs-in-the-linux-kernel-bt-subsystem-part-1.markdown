@@ -181,9 +181,21 @@ struct hci_dev_info {
 	bdaddr_t bdaddr;
 	[...]
 ```
-So given an `hdev->name` with an id of 5 bytes, and a non-zero `bdaddr`, an information leak could be triggered from the out of bounds write at strcpy().
+Given an `hdev->name` with an id value which is greater than 99999 in decimal notaion, any user-space tool that uses the `HCIGETDEVINFO` ioctl could be tricked into getting an incorrect Bluetooth device address.
+Furthermore, the given HCI id would return the first set `struct hci_dev`. For example, setting an ioctl with `HCIGETDEVINFO` of a  HCI device with id value of 65537 would return a `struct hci_dev` with id value of 1.
 
-# Bug 2: Use-after-free read
+
+## Timeline
+> 02/05/2022 - Bug reported to security@kernel.org
+>
+> 07/05/2022 - The [commit] was sent publicly, without disclosing any exploitation vectors or crash logs, as requested
+>
+> 11/05/2022 - The [commit] was merged upstream to all Linux Kernel stable versions
+
+## Preview to the next part
+
+In the next part I will describe several exploitation scenarios, including a use-after-free read and a NULL pointer dereference.
+# Bug 1: Use-after-free read
 
 A KASAN log, describing the bug:
 
@@ -315,14 +327,133 @@ A KASAN log, describing the bug:
 >=======================================================================
 >```
 
+# Bug #2: NULL pointer dereference
 
-## Timeline
-> 02/05/2022 - Bug reported to security@kernel.org
->
-> 07/05/2022 - The [commit] was sent publicly, without disclosing any exploitation vectors or crash logs, as requested
->
-> 11/05/2022 - The [commit] was merged upstream to all Linux Kernel stable versions
-
+>```
+>[ 4348.819535] BUG: kernel NULL pointer dereference, address:
+>0000000000000078
+>[ 4348.819541] #PF: supervisor read access in kernel mode
+>[ 4348.819543] #PF: error_code(0x0000) - not-present page
+>[ 4348.819546] PGD 0 P4D 0
+>[ 4348.819551] Oops: 0000 [#1] SMP KASAN NOPTI
+>[ 4348.819555] CPU: 9 PID: 2468 Comm: openfd Tainted: G    B   W   EL
+>5.10.106 #1
+>[ 4348.819557] Hardware name: VMware, Inc. VMware Virtual
+>Platform/440BX Desktop Reference Platform, BIOS 6.00 07/22/2020
+>[ 4348.819562] RIP: 0010:ida_free+0x17e/0x350
+>[ 4348.819566] Code: b5 d1 00 eb 61 a8 07 0f 85 d4 01 00 00 4c 89 f8 be
+>08 00 00 00 48 c1 f8 06 4c 8d 44 c5 00 4c 89 c7 4c 89 04 24 e8 42 4f 90
+>ff <4c> 0f a3 7d 00 72 79 48 8b 6c 24 40 40 f6 c5 07 0f 85 61 01 00 00
+>[ 4348.819568] RSP: 0018:ffff8881428c7980 EFLAGS: 00010002
+>[ 4348.819572] RAX: 0000000000000001 RBX: 1ffff11028518f32 RCX:
+>ffffffffacb1235e
+>[ 4348.819574] RDX: 0000000000000000 RSI: 0000000000000008 RDI:
+>0000000000000078
+>[ 4348.819576] RBP: 0000000000000000 R08: 0000000000000000 R09:
+>0000000000000080
+>[ 4348.819578] R10: ffffed1028518f24 R11: 0000000000000001 R12:
+>0000000000000246
+>[ 4348.819580] R13: ffff8881428c79c0 R14: 00000000000083fe R15:
+>00000000000003fe
+>[ 4348.819583] FS:  0000000000000000(0000) GS:ffff888568080000(0000)
+>knlGS:0000000000000000
+>[ 4348.819585] CS:  0010 DS: 0000 ES: 0000 CR0: 0000000080050033
+>[ 4348.819588] CR2: 0000000000000078 CR3: 00000002cb47c002 CR4:
+>00000000007706e0
+>[ 4348.819593] PKRU: 55555554
+>[ 4348.819595] Call Trace:
+>[ 4348.819600]  ? ida_destroy+0x2f0/0x2f0
+>[ 4348.819632]  ? hci_adv_instances_clear+0x1df/0x3d0 [bluetooth]
+>[ 4348.819660]  ? hci_cleanup_dev+0x5d7/0xbe0 [bluetooth]
+>[ 4348.819689]  ? bt_link_release+0x20/0x20 [bluetooth]
+>[ 4348.819718]  bt_host_release+0x66/0x90 [bluetooth]
+>[ 4348.819723]  device_release+0xf2/0x320
+>[ 4348.819726]  kobject_put+0x154/0x460
+>[ 4348.819731]  vhci_release+0x6b/0x110 [hci_vhci]
+>[ 4348.819735]  __fput+0x18f/0x8d0
+>[ 4348.819739]  task_work_run+0xea/0x1e0
+>[ 4348.819742]  do_exit+0x915/0x2c20
+>[ 4348.819746]  ? put_timespec64+0x9c/0x100
+>[ 4348.819749]  ? mm_update_next_owner+0xa40/0xa40
+>[ 4348.819752]  ? hrtimer_active+0x7c/0x1c0
+>[ 4348.819756]  ? _raw_spin_lock_irq+0x96/0x130
+>[ 4348.819759]  ? do_nanosleep+0x3c7/0x550
+>[ 4348.819762]  do_group_exit+0x7d/0x320
+>[ 4348.819765]  get_signal+0x34d/0x1f60
+>[ 4348.819769]  arch_do_signal+0x88/0x26e0
+>[ 4348.819772]  ? __hrtimer_init+0x230/0x230
+>[ 4348.819775]  ? copy_siginfo_to_user32+0x80/0x80
+>[ 4348.819778]  ? jiffies_to_timespec64+0x90/0x90
+>[ 4348.819781]  ? common_nsleep+0x63/0x80
+>[ 4348.819784]  ? __x64_sys_clock_nanosleep+0x224/0x390
+>[ 4348.819787]  ? __ia32_sys_clock_adjtime+0x60/0x60
+>[ 4348.819791]  exit_to_user_mode_prepare+0xd7/0x120
+>[ 4348.819795]  syscall_exit_to_user_mode+0x28/0x140
+>[ 4348.819798]  entry_SYSCALL_64_after_hwframe+0x44/0xa9
+>[ 4348.819801] RIP: 0033:0x7f27a255fc0a
+>[ 4348.819803] Code: Unable to access opcode bytes at RIP
+>0x7f27a255fbe0.
+>[ 4348.819805] RSP: 002b:00007ffcb54e9790 EFLAGS: 00000246 ORIG_RAX:
+>00000000000000e6
+>[ 4348.819809] RAX: fffffffffffffdfc RBX: ffffffffffffff80 RCX:
+>00007f27a255fc0a
+>[ 4348.819811] RDX: 00007ffcb54e97d0 RSI: 0000000000000000 RDI:
+>0000000000000000
+>[ 4348.819813] RBP: 0000000000000000 R08: 0000000000000000 R09:
+>00007f27a268a1b0
+>[ 4348.819815] R10: 00007ffcb54e97d0 R11: 0000000000000246 R12:
+>000055607fcb20d0
+>[ 4348.819818] R13: 0000000000000000 R14: 0000000000000000 R15:
+>0000000000000000
+>[ 4348.819820] Modules linked in: hci_vhci(E) uinput(E) rfcomm(E)
+>bnep(E) btusb(E) btrtl(E) btbcm(E) btintel(E) bluetooth(E)
+>jitterentropy_rng(E) vsock_loopback(E) drbg(E)
+>vmw_vsock_virtio_transport_common(E) intel_rapl_msr(E)
+>intel_rapl_common(E) intel_pmc_core_pltdrv(E) snd_ens1371(E)
+>vmw_vsock_vmci_transport(E) intel_pmc_core(E) vsock(E)
+>ghash_clmulni_intel(E) aes_generic(E) snd_ac97_codec(E) ac97_bus(E)
+>aesni_intel(E) gameport(E) crypto_simd(E) snd_rawmidi(E) cryptd(E)
+>ansi_cprng(E) snd_seq_device(E) glue_helper(E) snd_pcm(E) rapl(E)
+>ecdh_generic(E) snd_timer(E) rfkill(E) ecc(E) snd(E) libaes(E)
+>soundcore(E) vmw_balloon(E) joydev(E) sg(E) serio_raw(E) pcspkr(E)
+>vmw_vmci(E) evdev(E) ac(E) msr(E) parport_pc(E) ppdev(E) lp(E)
+>parport(E) fuse(E) configfs(E) ip_tables(E) x_tables(E) autofs4(E)
+>ext4(E) crc16(E) mbcache(E) jbd2(E) btrfs(E) blake2b_generic(E)
+>raid10(E) raid456(E) async_raid6_recov(E) async_memcpy(E) async_pq(E)
+>async_xor(E) async_tx(E) xor(E) raid6_pq(E) libcrc32c(E)
+>[ 4348.819904]  crc32c_generic(E) raid1(E) raid0(E) multipath(E)
+>linear(E) md_mod(E) hid_generic(E) usbhid(E) hid(E) sd_mod(E) t10_pi(E)
+>crc_t10dif(E) crct10dif_generic(E) vmwgfx(E) sr_mod(E) cdrom(E) ttm(E)
+>ata_generic(E) uhci_hcd(E) ehci_pci(E) drm_kms_helper(E) mptspi(E)
+>ata_piix(E) crct10dif_pclmul(E) ehci_hcd(E) crct10dif_common(E) cec(E)
+>mptscsih(E) crc32_pclmul(E) crc32c_intel(E) psmouse(E) mptbase(E)
+>libata(E) usbcore(E) scsi_transport_spi(E) drm(E) e1000(E) scsi_mod(E)
+>usb_common(E) i2c_piix4(E) button(E)
+>[ 4348.820013] CR2: 0000000000000078
+>[ 4348.820016] ---[ end trace 8dfc2a7c580dec5a ]---
+>[ 4348.820021] RIP: 0010:ida_free+0x17e/0x350
+>[ 4348.820024] Code: b5 d1 00 eb 61 a8 07 0f 85 d4 01 00 00 4c 89 f8 be
+>08 00 00 00 48 c1 f8 06 4c 8d 44 c5 00 4c 89 c7 4c 89 04 24 e8 42 4f 90
+>ff <4c> 0f a3 7d 00 72 79 48 8b 6c 24 40 40 f6 c5 07 0f 85 61 01 00 00
+>[ 4348.820026] RSP: 0018:ffff8881428c7980 EFLAGS: 00010002
+>[ 4348.820029] RAX: 0000000000000001 RBX: 1ffff11028518f32 RCX:
+>ffffffffacb1235e
+>[ 4348.820031] RDX: 0000000000000000 RSI: 0000000000000008 RDI:
+>0000000000000078
+>[ 4348.820033] RBP: 0000000000000000 R08: 0000000000000000 R09:
+>0000000000000080
+>[ 4348.820035] R10: ffffed1028518f24 R11: 0000000000000001 R12:
+>0000000000000246
+>[ 4348.820038] R13: ffff8881428c79c0 R14: 00000000000083fe R15:
+>00000000000003fe
+>[ 4348.820040] FS:  0000000000000000(0000) GS:ffff888568080000(0000)
+>knlGS:0000000000000000
+>[ 4348.820042] CS:  0010 DS: 0000 ES: 0000 CR0: 0000000080050033
+>[ 4348.820045] CR2: 0000000000000078 CR3: 00000002cb47c002 CR4:
+>00000000007706e0
+>[ 4348.820065] PKRU: 55555554
+>[ 4348.820067] Fixing recursive fault but reboot is needed!
+>```
 
 [commit]: https://github.com/torvalds/linux/commit/103a2f3255a95991252f8f13375c3a96a75011cd
 [setrlimit]: https://linux.die.net/man/2/setrlimit 
