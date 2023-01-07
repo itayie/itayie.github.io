@@ -85,7 +85,7 @@ Where `ida_simple_remove()` is defined as:
 #define ida_simple_remove(ida, id)	ida_free(ida, id)
 ```
 
-I have faced some difficulties, firstly with small RAM size. Given that 2^31 HCI sockets would take a tremendous amount of RAM space, I tried to bypass this using another bug, in the HCI socket's bind implementation:
+I have faced some difficulties, firstly with small RAM space. Given that allocating 2^31 HCI sockets would trigger a creation of a large amount of resident pages in RAM, I tried to bypass this using another bug, in the HCI socket's bind implementation:
 
 ```c
 static int hci_sock_bind(struct socket *sock, struct sockaddr *addr,

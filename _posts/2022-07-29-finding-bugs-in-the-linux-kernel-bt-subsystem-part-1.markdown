@@ -191,10 +191,9 @@ Furthermore, the given HCI id would return the first id value set (modulo to 655
 >
 > 11/05/2022 - The [commit] was merged upstream to all Linux Kernel stable versions
 
-## Preview to the next part
+## KASAN logs
 
-In the next part I will describe several exploitation scenarios, including a use-after-free read and a NULL pointer dereference.
-Attaching KASAN logs:
+The following KASAN logs were displayed when triggering the bugs described above:
 
 # Bug 1: Use-after-free read
 
